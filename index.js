@@ -16,6 +16,10 @@ const DEFAULT_SETTINGS = {
     context_messages: 15,
     include_card: true,
     include_wi: true,
+    wi_max_chars: 3000,
+    max_msg_chars: 12000,
+    max_total_chars: 40000,
+    theme: 'lumina',
     history: [],
     fab_x: -1,
     fab_y: -1,
@@ -24,6 +28,7 @@ const DEFAULT_SETTINGS = {
 // ---- SVG ICONS ----
 
 const ICONS = {
+    download: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>`,
     lumina: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="4" fill="currentColor" fill-opacity="0.15"/>
         <path d="M12 2v2.5M12 19.5V22M4.22 4.22l1.77 1.77M18.01 18.01l1.77 1.77M2 12h2.5M19.5 12H22M4.22 19.78l1.77-1.77M18.01 5.99l1.77-1.77"/>
@@ -71,9 +76,170 @@ function saveSetting(key, value) {
     saveSettingsDebounced();
 }
 
+// ---- LOGS ----
+
+const LOG_KEY = 'lumina_search_logs';
+const LOG_MAX = 150;
+let logBuffer = [];
+let lastRequest = null;
+
+try {
+    const saved = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
+    if (Array.isArray(saved)) logBuffer = saved.slice(-LOG_MAX);
+} catch { /* ignore */ }
+
+function lumLog(level, message, data) {
+    const entry = { t: new Date().toISOString(), level, message: String(message) };
+    if (data !== undefined) {
+        try {
+            if (data instanceof Error) entry.data = data.stack || data.message;
+            else if (typeof data === 'string') entry.data = data;
+            else entry.data = JSON.stringify(data);
+        } catch { entry.data = String(data); }
+        if (entry.data && entry.data.length > 2000) entry.data = entry.data.slice(0, 2000) + '…';
+    }
+    logBuffer.push(entry);
+    if (logBuffer.length > LOG_MAX) logBuffer.splice(0, logBuffer.length - LOG_MAX);
+    try { localStorage.setItem(LOG_KEY, JSON.stringify(logBuffer)); } catch { /* quota */ }
+    const fn = console[level] || console.log;
+    fn.call(console, '[Lumina]', message, data ?? '');
+}
+
+function buildLogReport() {
+    const ctx = getContext();
+    const s = { ...loadSettings() };
+    s.api_key = s.api_key ? '***hidden***' : '';
+    delete s.history;
+
+    const L = [];
+    L.push('=== Lumina Search log ===');
+    L.push(`Exported: ${new Date().toISOString()}`);
+    L.push(`UA: ${navigator.userAgent}`);
+    L.push(`Character: ${ctx.name2 || '-'} | User: ${ctx.name1 || '-'} | chat length: ${(ctx.chat || []).length}`);
+    L.push('');
+    L.push('--- Settings ---');
+    L.push(JSON.stringify(s, null, 2));
+    L.push('');
+
+    if (lastRequest) {
+        L.push('--- Last request (this session) ---');
+        L.push(`Time: ${lastRequest.time}`);
+        L.push(`Model: ${lastRequest.model || '(auto)'}`);
+        L.push(`Duration: ${lastRequest.ms ?? '-'} ms`);
+        L.push(`Context stats: ${JSON.stringify(lastRequest.stats)}`);
+        L.push('');
+        L.push('[SYSTEM PROMPT]');
+        L.push(lastRequest.system || '');
+        L.push('');
+        L.push('[USER CONTENT SENT TO API]');
+        L.push(lastRequest.user || '');
+        L.push('');
+        L.push(lastRequest.error ? '[ERROR]' : '[RESPONSE]');
+        L.push(lastRequest.error || lastRequest.response || '(empty)');
+        L.push('');
+    } else {
+        L.push('--- Last request: none in this session ---');
+        L.push('');
+    }
+
+    L.push('--- Event log ---');
+    for (const e of logBuffer) {
+        L.push(`${e.t} [${e.level}] ${e.message}${e.data ? ' | ' + e.data : ''}`);
+    }
+    return L.join('\n');
+}
+
+async function copyText(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+    }
+}
+
+async function exportLogs() {
+    const text = buildLogReport();
+    const filename = `lumina-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+
+    // 1) Системное меню «Поделиться» (телефоны): можно сохранить в файлы / отправить в мессенджер
+    try {
+        const file = new File([text], filename, { type: 'text/plain' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: 'Lumina Search log' });
+            showToast('Log shared', 'success');
+            return;
+        }
+    } catch (e) {
+        if (e && e.name === 'AbortError') return; // пользователь закрыл меню
+    }
+
+    // 2) Обычное скачивание
+    try {
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        showToast('Log downloaded', 'success');
+        return;
+    } catch { /* fall through */ }
+
+    // 3) Последний вариант — в буфер обмена
+    await copyText(text);
+    showToast('Download blocked — log copied', 'success');
+}
+
+function clearLogs() {
+    logBuffer = [];
+    lastRequest = null;
+    try { localStorage.removeItem(LOG_KEY); } catch { /* ignore */ }
+}
+
+// ---- THEMES ----
+
+// Сами цвета — в style.css (.lum-theme-*). Здесь только список и переключение класса.
+const THEMES = {
+    lumina: 'Lumina (default)',
+    auto: 'Auto (follow SillyTavern)',
+    light: 'Light',
+    amoled: 'AMOLED black',
+    midnight: 'Midnight blue',
+    rose: 'Rose',
+    forest: 'Forest',
+};
+
+function currentTheme() {
+    const t = loadSettings().theme;
+    return THEMES[t] ? t : 'lumina';
+}
+
+function applyTheme(name) {
+    const theme = THEMES[name] ? name : 'lumina';
+    for (const el of [
+        document.getElementById('lumina-panel'),
+        document.getElementById('lumina-fab'),
+        document.getElementById('lum-toast'),
+    ]) {
+        if (!el) continue;
+        [...el.classList].filter(c => c.startsWith('lum-theme-')).forEach(c => el.classList.remove(c));
+        el.classList.add(`lum-theme-${theme}`);
+    }
+}
+
 //
 //  Сбор контекста: карточка, персона, лорбук, история чата
 //
+
+let lastContextStats = {};
 
 function sub(ctx, text) {
     // Подставляем макросы {{user}} / {{char}} и т.п.
@@ -88,37 +254,60 @@ function tail(text, max) {
     return text.length > max ? '…' + text.slice(-max) : text;
 }
 
+function limitOf(value, fallback) {
+    // 0 = без лимита
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
 function getCharacter(ctx) {
     const chid = ctx.characterId;
     if (chid === undefined || chid === null || chid === '') return null;
     return ctx.characters?.[chid] || null;
 }
 
-function getChatLines(ctx, limit) {
+function getChatLines(ctx, limit, perMsgMax, totalMax, stats) {
     const chat = Array.isArray(ctx.chat) ? ctx.chat : [];
     const lines = [];
+    let total = 0;
+    stats.truncatedMsgs = 0;
+    stats.budgetHit = false;
+
     // идём с конца, пропуская системные/скрытые сообщения, пока не наберём limit
     for (let i = chat.length - 1; i >= 0 && lines.length < limit; i--) {
         const msg = chat[i];
         if (!msg || msg.is_system) continue;
-        const text = sub(ctx, (msg.mes || '').trim());
+        let text = sub(ctx, (msg.mes || '').trim());
         if (!text) continue;
+
+        if (perMsgMax > 0 && text.length > perMsgMax) {
+            text = tail(text, perMsgMax);
+            stats.truncatedMsgs++;
+        }
         const name = msg.name || (msg.is_user ? (ctx.name1 || 'User') : (ctx.name2 || 'Character'));
-        lines.push(`${name}: ${tail(text, 1500)}`);
+        const line = `${name}: ${text}`;
+
+        // Общий бюджет: самое новое сообщение берём всегда, старые отбрасываем
+        if (totalMax > 0 && lines.length > 0 && total + line.length > totalMax) {
+            stats.budgetHit = true;
+            break;
+        }
+        lines.push(line);
+        total += line.length;
     }
     return lines.reverse(); // от старых к новым
 }
 
-async function getWorldInfoText(ctx, chatLines) {
+async function getWorldInfoText(ctx, chatLines, maxChars) {
     try {
         if (typeof ctx.getWorldInfoPrompt !== 'function') return '';
         // WI-движок ждёт массив строк, НОВЫЕ сообщения первыми
         const res = await ctx.getWorldInfoPrompt([...chatLines].reverse(), ctx.maxContext || 8192, true);
         const text = [res?.worldInfoBefore, res?.worldInfoAfter]
             .filter(Boolean).join('\n').trim() || String(res?.worldInfoString || '').trim();
-        return text.slice(0, 3000);
+        return maxChars > 0 ? text.slice(0, maxChars) : text;
     } catch (e) {
-        console.warn('[Lumina] World Info failed:', e);
+        lumLog('warn', 'World Info scan failed', e);
         return '';
     }
 }
@@ -127,9 +316,15 @@ async function gatherContext() {
     const ctx = getContext();
     const s = loadSettings();
     const parts = [];
+    const stats = {};
 
     const limit = Math.max(0, Number(s.context_messages) || 0);
-    const chatLines = getChatLines(ctx, limit);
+    const chatLines = getChatLines(
+        ctx, limit,
+        limitOf(s.max_msg_chars, 12000),
+        limitOf(s.max_total_chars, 40000),
+        stats,
+    );
 
     // ---- Character card ----
     if (s.include_card) {
@@ -159,19 +354,24 @@ async function gatherContext() {
         if (personaDescription) parts.push(`[USER DESCRIPTION]\n${personaDescription.slice(0, 1500)}`);
     }
 
-    // ---- World Info / Lorebooks ----
+    // ---- World Info / Lorebooks (скан можно отключить в настройках) ----
+    stats.wiScan = !!s.include_wi;
+    stats.wiChars = 0;
     if (s.include_wi) {
-        const wi = await getWorldInfoText(ctx, chatLines);
+        const wi = await getWorldInfoText(ctx, chatLines, limitOf(s.wi_max_chars, 3000));
+        stats.wiChars = wi.length;
         if (wi) parts.push(`[WORLD INFO]\n${wi}`);
     }
 
     // ---- Chat history ----
+    stats.chatMsgs = chatLines.length;
     if (chatLines.length > 0) {
         parts.push(`[RECENT CHAT]\n${chatLines.join('\n')}`);
     }
 
     const result = parts.join('\n\n');
-    console.debug('[Lumina] context:', { chatLinesCount: chatLines.length, chars: result.length });
+    stats.chars = result.length;
+    lastContextStats = stats;
     return result;
 }
 
@@ -299,6 +499,13 @@ function buildPanelHTML() {
                 <div class="lum-settings">
 
                     <div class="lum-settings-group">
+                        <label class="lum-settings-label">Theme</label>
+                        <select class="lum-select" id="lum-theme">
+                            ${Object.entries(THEMES).map(([k, v]) => `<option value="${k}" ${currentTheme() === k ? 'selected' : ''}>${v}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div class="lum-settings-group">
                         <label class="lum-settings-label">API URL</label>
                         <input class="lum-settings-input" id="lum-api-url" type="text"
                             value="${escapeAttr(s.api_url)}"
@@ -349,7 +556,7 @@ function buildPanelHTML() {
                             </select>
                         </div>
                         <div class="lum-settings-group">
-                            <label class="lum-settings-label">Include Lorebooks</label>
+                            <label class="lum-settings-label">Scan Lorebooks</label>
                             <select class="lum-select" id="lum-include-wi">
                                 <option value="true" ${s.include_wi ? 'selected' : ''}>Yes</option>
                                 <option value="false" ${!s.include_wi ? 'selected' : ''}>No</option>
@@ -382,6 +589,40 @@ function buildPanelHTML() {
                             <label class="lum-settings-label">Temperature</label>
                             <input class="lum-settings-input" id="lum-temperature" type="number"
                                 value="${s.temperature}" min="0" max="2" step="0.05" style="width:100%" />
+                        </div>
+                    </div>
+
+                    <div class="lum-divider"></div>
+
+                    <div class="lum-inject-settings">
+                        <div class="lum-settings-group">
+                            <label class="lum-settings-label">Max chars / message</label>
+                            <input class="lum-settings-input" id="lum-max-msg-chars" type="number"
+                                value="${s.max_msg_chars}" min="0" style="width:100%" />
+                        </div>
+                        <div class="lum-settings-group">
+                            <label class="lum-settings-label">Chat budget (chars)</label>
+                            <input class="lum-settings-input" id="lum-max-total-chars" type="number"
+                                value="${s.max_total_chars}" min="0" style="width:100%" />
+                        </div>
+                    </div>
+                    <div class="lum-inject-settings">
+                        <div class="lum-settings-group">
+                            <label class="lum-settings-label">Lorebook limit (chars)</label>
+                            <input class="lum-settings-input" id="lum-wi-max-chars" type="number"
+                                value="${s.wi_max_chars}" min="0" style="width:100%" />
+                        </div>
+                    </div>
+                    <span class="lum-model-status">0 = no limit. About 3 chars ≈ 1 token (Russian), 4 chars ≈ 1 token (English).</span>
+
+                    <div class="lum-divider"></div>
+
+                    <div class="lum-settings-group">
+                        <label class="lum-settings-label">Diagnostics</label>
+                        <div class="lum-actions">
+                            <button class="lum-action-btn" id="lum-export-logs" type="button">${ICONS.download} <span>Export log</span></button>
+                            <button class="lum-action-btn" id="lum-copy-logs" type="button">${ICONS.copy} <span>Copy log</span></button>
+                            <button class="lum-action-btn" id="lum-clear-logs" type="button">${ICONS.clear} <span>Clear</span></button>
                         </div>
                     </div>
 
@@ -534,22 +775,48 @@ async function queryLuminaAPI(query) {
     const headers = { 'Content-Type': 'application/json' };
     if (s.api_key) headers['Authorization'] = `Bearer ${s.api_key}`;
 
-    const response = await fetch(`${url}/chat/completions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-    });
+    const started = performance.now();
+    lastRequest = {
+        time: new Date().toISOString(),
+        model: s.model,
+        system: s.system_prompt,
+        user: userContent,
+        stats: { ...lastContextStats },
+        response: null,
+        error: null,
+        ms: null,
+    };
+    lumLog('info', 'Request sent', { url, model: s.model || '(auto)', userChars: userContent.length, ...lastContextStats });
 
-    if (!response.ok) {
-        const errText = await response.text().catch(() => '');
-        throw new Error(`API ${response.status}: ${errText.slice(0, 200)}`);
+    try {
+        const response = await fetch(`${url}/chat/completions`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            throw new Error(`API ${response.status}: ${errText.slice(0, 200)}`);
+        }
+
+        const data = await response.json();
+        let out;
+        if (data.choices?.[0]) out = data.choices[0].message?.content || data.choices[0].text || '';
+        else if (data.content) out = data.content;
+        else if (data.response) out = data.response;
+        else throw new Error('Unknown response format');
+
+        lastRequest.response = out;
+        lastRequest.ms = Math.round(performance.now() - started);
+        lumLog(out ? 'info' : 'warn', out ? 'Response received' : 'Response is EMPTY', { ms: lastRequest.ms, chars: out.length });
+        return out;
+    } catch (err) {
+        lastRequest.error = err.message;
+        lastRequest.ms = Math.round(performance.now() - started);
+        lumLog('error', 'Request failed', err);
+        throw err;
     }
-
-    const data = await response.json();
-    if (data.choices?.[0]) return data.choices[0].message?.content || data.choices[0].text || '';
-    if (data.content) return data.content;
-    if (data.response) return data.response;
-    throw new Error('Unknown response format');
 }
 
 // ---- INJECT ----
@@ -564,6 +831,7 @@ function injectResult(text) {
         `[Lumina Search — use creatively in your response]\n${text}`,
         position, depth,
     );
+    lumLog('info', 'Injected into prompt', { chars: text.length, depth, position: s.inject_position });
     showToast('Injected into prompt', 'success');
 }
 
@@ -576,7 +844,7 @@ function showToast(message, type = 'success') {
         toast.id = 'lum-toast';
         document.body.appendChild(toast);
     }
-    toast.className = `lum-toast lum-toast-${type}`;
+    toast.className = `lum-toast lum-toast-${type} lum-theme-${currentTheme()}`;
     toast.textContent = message;
     requestAnimationFrame(() => toast.classList.add('lum-toast-visible'));
     setTimeout(() => toast.classList.remove('lum-toast-visible'), 2200);
@@ -670,6 +938,26 @@ jQuery(async () => {
     const refreshModelsBtn = document.getElementById('lum-refresh-models');
     const modelSelect = document.getElementById('lum-model-select');
     const modelStatus = document.getElementById('lum-model-status');
+
+    // ---- Theme ----
+    const themeSelect = document.getElementById('lum-theme');
+    applyTheme(currentTheme());
+    themeSelect.addEventListener('change', () => {
+        saveSetting('theme', themeSelect.value);
+        applyTheme(themeSelect.value);
+        lumLog('info', 'Theme changed', themeSelect.value);
+    });
+
+    // ---- Diagnostics ----
+    document.getElementById('lum-export-logs').addEventListener('click', () => exportLogs());
+    document.getElementById('lum-copy-logs').addEventListener('click', async () => {
+        await copyText(buildLogReport());
+        showToast('Log copied', 'success');
+    });
+    document.getElementById('lum-clear-logs').addEventListener('click', () => {
+        clearLogs();
+        showToast('Log cleared', 'success');
+    });
 
     // ---- FAB: draggable + tap to toggle ----
     let panelOpen = false;
@@ -804,6 +1092,9 @@ jQuery(async () => {
         'lum-max-tokens': 'max_tokens',
         'lum-temperature': 'temperature',
         'lum-context-messages': 'context_messages',
+        'lum-max-msg-chars': 'max_msg_chars',
+        'lum-max-total-chars': 'max_total_chars',
+        'lum-wi-max-chars': 'wi_max_chars',
     };
 
     for (const [elemId, settingKey] of Object.entries(settingsMap)) {
@@ -812,7 +1103,7 @@ jQuery(async () => {
         const evt = elem.tagName === 'SELECT' ? 'change' : 'input';
         elem.addEventListener(evt, () => {
             let val = elem.value;
-            if (['inject_depth', 'max_tokens', 'context_messages'].includes(settingKey)) {
+            if (['inject_depth', 'max_tokens', 'context_messages', 'max_msg_chars', 'max_total_chars', 'wi_max_chars'].includes(settingKey)) {
                 val = parseInt(val, 10) || 0;
             } else if (settingKey === 'temperature') {
                 val = parseFloat(val) || 0;
@@ -833,6 +1124,7 @@ jQuery(async () => {
     if (includeWiElem) {
         includeWiElem.addEventListener('change', () => {
             saveSetting('include_wi', includeWiElem.value === 'true');
+            lumLog('info', 'Lorebook scan', includeWiElem.value === 'true' ? 'enabled' : 'disabled');
         });
     }
 
