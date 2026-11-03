@@ -18,14 +18,15 @@
 
     --lum-mint: #7DF9C1;
     --lum-mint-dim: #4aad82;
-    --lum-mint-glow: rgba(125, 249, 193, 0.12);
 
     --lum-amber: #F5C27A;
     --lum-amber-dim: #b8914a;
-    --lum-amber-glow: rgba(245, 194, 122, 0.12);
 
     --lum-danger: #F07070;
-    --lum-danger-glow: rgba(240, 112, 112, 0.15);
+
+    --lum-fab-idle: #6b6b6b;
+    --lum-fab-hover: #909090;
+    --lum-shadow-color: rgba(0, 0, 0, 0.5);
 
     --lum-radius: 10px;
     --lum-radius-sm: 6px;
@@ -64,20 +65,20 @@
 #lumina-fab svg {
     width: 100%;
     height: 100%;
-    color: #6b6b6b;
+    color: var(--lum-fab-idle);
     filter: none;
     pointer-events: none;
     transition: color 0.2s ease, filter 0.2s ease;
 }
 
 #lumina-fab:hover svg {
-    color: #909090;
+    color: var(--lum-fab-hover);
     transform: scale(1.1);
 }
 
 #lumina-fab.lum-fab-active svg {
     color: var(--lum-mint);
-    filter: drop-shadow(0 0 6px rgba(125, 249, 193, 0.5));
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--lum-mint) 50%, transparent));
 }
 
 /* Mobile — larger touch target */
@@ -106,9 +107,9 @@
     right: 15px;
     width: 360px;
     max-height: 80vh;
-    border: 1px solid rgba(125, 249, 193, 0.08);
+    border: 1px solid color-mix(in srgb, var(--lum-mint) 8%, transparent);
     border-radius: 10px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 8px 30px var(--lum-shadow-color);
     overflow: hidden;
 }
 
@@ -150,7 +151,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 18px 20px 14px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid color-mix(in srgb, var(--lum-text-primary) 4%, transparent);
     flex-shrink: 0;
 }
 
@@ -169,7 +170,7 @@
     width: 100%;
     height: 100%;
     color: var(--lum-mint);
-    filter: drop-shadow(0 0 6px rgba(125, 249, 193, 0.4));
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--lum-mint) 40%, transparent));
 }
 
 .lum-logo-text {
@@ -209,7 +210,7 @@
 
 .lum-icon-btn:hover {
     color: var(--lum-text-secondary);
-    background: rgba(255, 255, 255, 0.04);
+    background: color-mix(in srgb, var(--lum-text-primary) 4%, transparent);
 }
 
 .lum-icon-btn svg {
@@ -220,11 +221,11 @@
 /* Gear active: amber glow + spin animation */
 .lum-icon-btn.lum-gear-active {
     color: var(--lum-amber);
-    background: var(--lum-amber-glow);
+    background: color-mix(in srgb, var(--lum-amber) 12%, transparent);
 }
 
 .lum-icon-btn.lum-gear-active svg {
-    filter: drop-shadow(0 0 6px rgba(245, 194, 122, 0.4));
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--lum-amber) 40%, transparent));
     animation: lum-gear-spin 0.4s ease-out;
 }
 
@@ -264,7 +265,7 @@
     max-height: 200px;
     resize: vertical;
     background: var(--lum-deep);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid color-mix(in srgb, var(--lum-text-primary) 5%, transparent);
     border-radius: var(--lum-radius);
     padding: 14px 16px 48px;
     font-family: var(--lum-font);
@@ -283,11 +284,11 @@
 }
 
 .lum-search-textarea:focus {
-    border-color: rgba(245, 194, 122, 0.2);
+    border-color: color-mix(in srgb, var(--lum-amber) 20%, transparent);
     box-shadow:
-        0 0 0 1px rgba(245, 194, 122, 0.08),
-        0 0 30px rgba(245, 194, 122, 0.06),
-        inset 0 0 20px rgba(245, 194, 122, 0.02);
+        0 0 0 1px color-mix(in srgb, var(--lum-amber) 8%, transparent),
+        0 0 30px color-mix(in srgb, var(--lum-amber) 6%, transparent),
+        inset 0 0 20px color-mix(in srgb, var(--lum-amber) 2%, transparent);
 }
 
 .lum-search-controls {
@@ -312,8 +313,8 @@
     align-items: center;
     gap: 6px;
     padding: 6px 14px;
-    background: linear-gradient(135deg, rgba(125, 249, 193, 0.12), rgba(125, 249, 193, 0.06));
-    border: 1px solid rgba(125, 249, 193, 0.15);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--lum-mint) 12%, transparent), color-mix(in srgb, var(--lum-mint) 6%, transparent));
+    border: 1px solid color-mix(in srgb, var(--lum-mint) 15%, transparent);
     border-radius: var(--lum-radius-sm);
     color: var(--lum-mint);
     font-family: var(--lum-font);
@@ -326,8 +327,8 @@
 }
 
 .lum-search-btn:hover {
-    background: linear-gradient(135deg, rgba(125, 249, 193, 0.2), rgba(125, 249, 193, 0.1));
-    box-shadow: 0 0 20px rgba(125, 249, 193, 0.1);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--lum-mint) 20%, transparent), color-mix(in srgb, var(--lum-mint) 10%, transparent));
+    box-shadow: 0 0 20px color-mix(in srgb, var(--lum-mint) 10%, transparent);
 }
 
 .lum-search-btn:active { transform: scale(0.97); }
@@ -356,7 +357,7 @@
 
 .lum-ctx-dot.lum-ctx-active {
     background: var(--lum-mint);
-    box-shadow: 0 0 8px rgba(125, 249, 193, 0.5);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--lum-mint) 50%, transparent);
 }
 
 .lum-context-indicator span {
@@ -387,7 +388,7 @@
 .lum-pulse-ring {
     width: 18px;
     height: 18px;
-    border: 2px solid rgba(125, 249, 193, 0.15);
+    border: 2px solid color-mix(in srgb, var(--lum-mint) 15%, transparent);
     border-top-color: var(--lum-mint);
     border-radius: 50%;
     animation: lum-spin 0.8s linear infinite;
@@ -429,18 +430,18 @@
     height: 6px;
     border-radius: 50%;
     background: var(--lum-mint);
-    box-shadow: 0 0 8px rgba(125, 249, 193, 0.5);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--lum-mint) 50%, transparent);
     animation: lum-breathe 3s ease-in-out infinite;
 }
 
 @keyframes lum-breathe {
-    0%, 100% { box-shadow: 0 0 6px rgba(125, 249, 193, 0.3); }
-    50% { box-shadow: 0 0 14px rgba(125, 249, 193, 0.6); }
+    0%, 100% { box-shadow: 0 0 6px color-mix(in srgb, var(--lum-mint) 30%, transparent); }
+    50% { box-shadow: 0 0 14px color-mix(in srgb, var(--lum-mint) 60%, transparent); }
 }
 
 .lum-result-content {
     background: var(--lum-deep);
-    border: 1px solid rgba(125, 249, 193, 0.06);
+    border: 1px solid color-mix(in srgb, var(--lum-mint) 6%, transparent);
     border-radius: var(--lum-radius);
     padding: 16px;
     font-size: 13px;
@@ -452,8 +453,8 @@
     white-space: pre-wrap;
     word-wrap: break-word;
     box-shadow:
-        0 0 30px rgba(125, 249, 193, 0.03),
-        inset 0 0 30px rgba(125, 249, 193, 0.01);
+        0 0 30px color-mix(in srgb, var(--lum-mint) 3%, transparent),
+        inset 0 0 30px color-mix(in srgb, var(--lum-mint) 1%, transparent);
     scrollbar-width: thin;
     scrollbar-color: var(--lum-subtle) transparent;
 }
@@ -488,40 +489,40 @@
 .lum-action-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
 
 .lum-btn-inject {
-    background: linear-gradient(135deg, rgba(125, 249, 193, 0.1), rgba(125, 249, 193, 0.04));
-    border-color: rgba(125, 249, 193, 0.15);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--lum-mint) 10%, transparent), color-mix(in srgb, var(--lum-mint) 4%, transparent));
+    border-color: color-mix(in srgb, var(--lum-mint) 15%, transparent);
     color: var(--lum-mint);
 }
 
 .lum-btn-inject:hover {
-    background: linear-gradient(135deg, rgba(125, 249, 193, 0.18), rgba(125, 249, 193, 0.08));
-    box-shadow: 0 0 24px rgba(125, 249, 193, 0.08);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--lum-mint) 18%, transparent), color-mix(in srgb, var(--lum-mint) 8%, transparent));
+    box-shadow: 0 0 24px color-mix(in srgb, var(--lum-mint) 8%, transparent);
 }
 
 .lum-btn-copy {
-    background: linear-gradient(135deg, rgba(245, 194, 122, 0.08), rgba(245, 194, 122, 0.03));
-    border-color: rgba(245, 194, 122, 0.12);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--lum-amber) 8%, transparent), color-mix(in srgb, var(--lum-amber) 3%, transparent));
+    border-color: color-mix(in srgb, var(--lum-amber) 12%, transparent);
     color: var(--lum-amber);
 }
 
 .lum-btn-copy:hover {
-    background: linear-gradient(135deg, rgba(245, 194, 122, 0.15), rgba(245, 194, 122, 0.06));
-    box-shadow: 0 0 24px rgba(245, 194, 122, 0.08);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--lum-amber) 15%, transparent), color-mix(in srgb, var(--lum-amber) 6%, transparent));
+    box-shadow: 0 0 24px color-mix(in srgb, var(--lum-amber) 8%, transparent);
 }
 
 .lum-btn-clear {
     flex: 0 0 auto;
     width: 36px;
     background: transparent;
-    border-color: rgba(255, 255, 255, 0.06);
+    border-color: color-mix(in srgb, var(--lum-text-primary) 6%, transparent);
     color: var(--lum-text-muted);
     padding: 10px 0;
 }
 
 .lum-btn-clear:hover {
-    border-color: rgba(240, 112, 112, 0.2);
+    border-color: color-mix(in srgb, var(--lum-danger) 20%, transparent);
     color: var(--lum-danger);
-    background: var(--lum-danger-glow);
+    background: color-mix(in srgb, var(--lum-danger) 15%, transparent);
 }
 
 /* ============================================
@@ -533,7 +534,7 @@
 .lum-chip {
     padding: 4px 10px;
     background: var(--lum-elevated);
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    border: 1px solid color-mix(in srgb, var(--lum-text-primary) 4%, transparent);
     border-radius: 20px;
     font-size: 11px;
     font-weight: 400;
@@ -547,9 +548,9 @@
 }
 
 .lum-chip:hover {
-    border-color: rgba(125, 249, 193, 0.15);
+    border-color: color-mix(in srgb, var(--lum-mint) 15%, transparent);
     color: var(--lum-mint);
-    background: var(--lum-mint-glow);
+    background: color-mix(in srgb, var(--lum-mint) 12%, transparent);
 }
 
 /* ============================================
@@ -581,16 +582,16 @@
 
 .lum-toast-success {
     background: var(--lum-surface);
-    border: 1px solid rgba(125, 249, 193, 0.2);
+    border: 1px solid color-mix(in srgb, var(--lum-mint) 20%, transparent);
     color: var(--lum-mint);
-    box-shadow: 0 4px 20px rgba(125, 249, 193, 0.1);
+    box-shadow: 0 4px 20px color-mix(in srgb, var(--lum-mint) 10%, transparent);
 }
 
 .lum-toast-error {
     background: var(--lum-surface);
-    border: 1px solid rgba(240, 112, 112, 0.2);
+    border: 1px solid color-mix(in srgb, var(--lum-danger) 20%, transparent);
     color: var(--lum-danger);
-    box-shadow: 0 4px 20px rgba(240, 112, 112, 0.1);
+    box-shadow: 0 4px 20px color-mix(in srgb, var(--lum-danger) 10%, transparent);
 }
 
 /* ============================================
@@ -630,7 +631,7 @@
 .lum-settings-input {
     width: 100%;
     background: var(--lum-deep);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid color-mix(in srgb, var(--lum-text-primary) 5%, transparent);
     border-radius: var(--lum-radius-sm);
     padding: 10px 12px;
     font-family: var(--lum-mono);
@@ -642,8 +643,8 @@
 }
 
 .lum-settings-input:focus {
-    border-color: rgba(245, 194, 122, 0.2);
-    box-shadow: 0 0 16px rgba(245, 194, 122, 0.05);
+    border-color: color-mix(in srgb, var(--lum-amber) 20%, transparent);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--lum-amber) 5%, transparent);
 }
 
 .lum-settings-textarea {
@@ -651,7 +652,7 @@
     min-height: 60px;
     resize: vertical;
     background: var(--lum-deep);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid color-mix(in srgb, var(--lum-text-primary) 5%, transparent);
     border-radius: var(--lum-radius-sm);
     padding: 10px 12px;
     font-family: var(--lum-font);
@@ -665,8 +666,8 @@
 }
 
 .lum-settings-textarea:focus {
-    border-color: rgba(245, 194, 122, 0.2);
-    box-shadow: 0 0 16px rgba(245, 194, 122, 0.05);
+    border-color: color-mix(in srgb, var(--lum-amber) 20%, transparent);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--lum-amber) 5%, transparent);
 }
 
 .lum-inject-settings {
@@ -679,7 +680,7 @@
 .lum-select {
     width: 100%;
     background: var(--lum-deep);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid color-mix(in srgb, var(--lum-text-primary) 5%, transparent);
     border-radius: var(--lum-radius-sm);
     padding: 8px 28px 8px 10px;
     font-family: var(--lum-mono);
@@ -690,12 +691,12 @@
     transition: var(--lum-transition);
     -webkit-appearance: none;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235a574f' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 10px center;
 }
 
-.lum-select:focus { border-color: rgba(245, 194, 122, 0.2); }
+.lum-select:focus { border-color: color-mix(in srgb, var(--lum-amber) 20%, transparent); }
 .lum-select option { background: var(--lum-surface); color: var(--lum-text-primary); }
 
 /* ---- Model row: label + refresh ---- */
@@ -712,8 +713,8 @@
     justify-content: center;
     width: 26px;
     height: 26px;
-    background: rgba(125, 249, 193, 0.06);
-    border: 1px solid rgba(125, 249, 193, 0.1);
+    background: color-mix(in srgb, var(--lum-mint) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--lum-mint) 10%, transparent);
     border-radius: var(--lum-radius-sm);
     color: var(--lum-mint-dim);
     cursor: pointer;
@@ -729,9 +730,9 @@
 
 .lum-refresh-btn:hover {
     color: var(--lum-mint);
-    background: rgba(125, 249, 193, 0.12);
-    border-color: rgba(125, 249, 193, 0.2);
-    box-shadow: 0 0 12px rgba(125, 249, 193, 0.08);
+    background: color-mix(in srgb, var(--lum-mint) 12%, transparent);
+    border-color: color-mix(in srgb, var(--lum-mint) 20%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--lum-mint) 8%, transparent);
 }
 
 /* Spinning state when fetching */
@@ -764,8 +765,8 @@
     background: linear-gradient(
         90deg,
         transparent,
-        rgba(255, 255, 255, 0.04) 20%,
-        rgba(255, 255, 255, 0.04) 80%,
+        color-mix(in srgb, var(--lum-text-primary) 4%, transparent) 20%,
+        color-mix(in srgb, var(--lum-text-primary) 4%, transparent) 80%,
         transparent
     );
     margin: 4px 0;
@@ -808,3 +809,131 @@
         gap: 10px;
     }
 }
+
+/* ============================================
+   THEMES
+   Класс .lum-theme-* вешается из index.js на панель, кнопку и тост.
+   Тема просто переопределяет переменные. Оформление по умолчанию
+   ("lumina") — это значения из :root выше, отдельного блока ему не нужно.
+   ============================================ */
+
+/* ---- Auto: подстраивается под тему SillyTavern ---- */
+.lum-theme-auto {
+    --lum-void: var(--SmartThemeBlurTintColor, #0c0c11);
+    --lum-deep: color-mix(in srgb, var(--SmartThemeBodyColor, #e8e4df) 6%, var(--SmartThemeBlurTintColor, #0c0c11));
+    --lum-surface: color-mix(in srgb, var(--SmartThemeBodyColor, #e8e4df) 9%, var(--SmartThemeBlurTintColor, #0c0c11));
+    --lum-elevated: color-mix(in srgb, var(--SmartThemeBodyColor, #e8e4df) 13%, var(--SmartThemeBlurTintColor, #0c0c11));
+    --lum-subtle: color-mix(in srgb, var(--SmartThemeBodyColor, #e8e4df) 22%, var(--SmartThemeBlurTintColor, #0c0c11));
+
+    --lum-text-primary: var(--SmartThemeBodyColor, #e8e4df);
+    --lum-text-secondary: color-mix(in srgb, var(--SmartThemeBodyColor, #e8e4df) 68%, transparent);
+    --lum-text-muted: color-mix(in srgb, var(--SmartThemeBodyColor, #e8e4df) 45%, transparent);
+
+    --lum-mint: var(--SmartThemeQuoteColor, #7DF9C1);
+    --lum-mint-dim: color-mix(in srgb, var(--SmartThemeQuoteColor, #7DF9C1) 70%, var(--SmartThemeBlurTintColor, #0c0c11));
+    --lum-amber: var(--SmartThemeUnderlineColor, #F5C27A);
+    --lum-amber-dim: color-mix(in srgb, var(--SmartThemeUnderlineColor, #F5C27A) 70%, var(--SmartThemeBlurTintColor, #0c0c11));
+
+    --lum-fab-idle: color-mix(in srgb, var(--SmartThemeBodyColor, #e8e4df) 50%, transparent);
+    --lum-fab-hover: color-mix(in srgb, var(--SmartThemeBodyColor, #e8e4df) 80%, transparent);
+}
+
+#lumina-panel.lum-theme-auto {
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+}
+
+/* ---- Light ---- */
+.lum-theme-light {
+    --lum-void: #fbfaf7;
+    --lum-deep: #f1efe9;
+    --lum-surface: #e9e6de;
+    --lum-elevated: #e3dfd5;
+    --lum-subtle: #cfcabd;
+
+    --lum-text-primary: #23211c;
+    --lum-text-secondary: #5f5a4e;
+    --lum-text-muted: #8a8475;
+
+    --lum-mint: #0f8a5f;
+    --lum-mint-dim: #2f7d5f;
+    --lum-amber: #a86f00;
+    --lum-amber-dim: #8a5a00;
+    --lum-danger: #c43c3c;
+
+    --lum-fab-idle: #8a8475;
+    --lum-fab-hover: #5f5a4e;
+    --lum-shadow-color: rgba(0, 0, 0, 0.18);
+}
+
+/* ---- AMOLED black ---- */
+.lum-theme-amoled {
+    --lum-void: #000000;
+    --lum-deep: #0a0a0a;
+    --lum-surface: #111111;
+    --lum-elevated: #181818;
+    --lum-subtle: #2a2a2a;
+
+    --lum-text-primary: #f2f2f2;
+    --lum-text-secondary: #9a9a9a;
+    --lum-text-muted: #626262;
+
+    --lum-shadow-color: rgba(0, 0, 0, 0.8);
+}
+
+/* ---- Midnight blue ---- */
+.lum-theme-midnight {
+    --lum-void: #0b1224;
+    --lum-deep: #0f1830;
+    --lum-surface: #141f3a;
+    --lum-elevated: #1b2848;
+    --lum-subtle: #2a3a62;
+
+    --lum-text-primary: #dfe6f7;
+    --lum-text-secondary: #93a0c4;
+    --lum-text-muted: #5d6a8f;
+
+    --lum-mint: #6ea8ff;
+    --lum-mint-dim: #4a7fd1;
+    --lum-amber: #ffd479;
+    --lum-amber-dim: #c9a24f;
+    --lum-danger: #ff7a7a;
+}
+
+/* ---- Rose ---- */
+.lum-theme-rose {
+    --lum-void: #1d1217;
+    --lum-deep: #251820;
+    --lum-surface: #2e1c26;
+    --lum-elevated: #38222d;
+    --lum-subtle: #4d2f3d;
+
+    --lum-text-primary: #f7e4ea;
+    --lum-text-secondary: #c295a4;
+    --lum-text-muted: #8a6070;
+
+    --lum-mint: #ff7a9c;
+    --lum-mint-dim: #c4577a;
+    --lum-amber: #ffc38a;
+    --lum-amber-dim: #c4925f;
+    --lum-danger: #ff6b6b;
+}
+
+/* ---- Forest ---- */
+.lum-theme-forest {
+    --lum-void: #0b1510;
+    --lum-deep: #101c16;
+    --lum-surface: #15251c;
+    --lum-elevated: #1c3025;
+    --lum-subtle: #2b4838;
+
+    --lum-text-primary: #e1efe5;
+    --lum-text-secondary: #8fb09c;
+    --lum-text-muted: #5d7d6b;
+
+    --lum-mint: #6fd08c;
+    --lum-mint-dim: #4aa268;
+    --lum-amber: #e6cf7a;
+    --lum-amber-dim: #b3a054;
+    --lum-danger: #f07070;
+   }
