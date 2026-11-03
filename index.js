@@ -1,5 +1,5 @@
 import { extension_settings, getContext } from '../../../extensions.js';
-import { saveSettingsDebounced } from '../../../../script.js';
+import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';
 import { SlashCommandParser } from '../../../slash-commands/SlashCommandParser.js';
 import { SlashCommand } from '../../../slash-commands/SlashCommand.js';
 
@@ -71,103 +71,108 @@ function saveSetting(key, value) {
     saveSettingsDebounced();
 }
 
-// 
-//  Для контента, тут захват инфы из чата и карт
-// 
+//
+//  Сбор контекста: карточка, персона, лорбук, история чата
+//
 
-function gatherContext() {
+function sub(ctx, text) {
+    // Подставляем макросы {{user}} / {{char}} и т.п.
+    try {
+        if (typeof ctx.substituteParams === 'function') return ctx.substituteParams(String(text ?? ''));
+    } catch { /* ignore */ }
+    return String(text ?? '');
+}
+
+function tail(text, max) {
+    // Для сообщений чата самое важное — КОНЕЦ, поэтому режем с начала
+    return text.length > max ? '…' + text.slice(-max) : text;
+}
+
+function getCharacter(ctx) {
+    const chid = ctx.characterId;
+    if (chid === undefined || chid === null || chid === '') return null;
+    return ctx.characters?.[chid] || null;
+}
+
+function getChatLines(ctx, limit) {
+    const chat = Array.isArray(ctx.chat) ? ctx.chat : [];
+    const lines = [];
+    // идём с конца, пропуская системные/скрытые сообщения, пока не наберём limit
+    for (let i = chat.length - 1; i >= 0 && lines.length < limit; i--) {
+        const msg = chat[i];
+        if (!msg || msg.is_system) continue;
+        const text = sub(ctx, (msg.mes || '').trim());
+        if (!text) continue;
+        const name = msg.name || (msg.is_user ? (ctx.name1 || 'User') : (ctx.name2 || 'Character'));
+        lines.push(`${name}: ${tail(text, 1500)}`);
+    }
+    return lines.reverse(); // от старых к новым
+}
+
+async function getWorldInfoText(ctx, chatLines) {
+    try {
+        if (typeof ctx.getWorldInfoPrompt !== 'function') return '';
+        // WI-движок ждёт массив строк, НОВЫЕ сообщения первыми
+        const res = await ctx.getWorldInfoPrompt([...chatLines].reverse(), ctx.maxContext || 8192, true);
+        const text = [res?.worldInfoBefore, res?.worldInfoAfter]
+            .filter(Boolean).join('\n').trim() || String(res?.worldInfoString || '').trim();
+        return text.slice(0, 3000);
+    } catch (e) {
+        console.warn('[Lumina] World Info failed:', e);
+        return '';
+    }
+}
+
+async function gatherContext() {
     const ctx = getContext();
     const s = loadSettings();
     const parts = [];
 
-    // ---- Character card info ----
+    const limit = Math.max(0, Number(s.context_messages) || 0);
+    const chatLines = getChatLines(ctx, limit);
+
+    // ---- Character card ----
     if (s.include_card) {
-        const charName = ctx.name2 || '';
+        const char = getCharacter(ctx);
+        const charName = ctx.name2 || char?.name || '';
         const userName = ctx.name1 || 'User';
+        const field = (name) => sub(ctx, (char?.[name] || char?.data?.[name] || '')).trim();
 
-        if (charName) {
-            parts.push(`[CHARACTER: ${charName}]`);
-        }
+        if (charName) parts.push(`[CHARACTER: ${charName}]`);
 
-        // Description
-        const description = ctx.characters?.[ctx.characterId]?.description
-            || ctx.characterData?.description
-            || '';
-        if (description) {
-            parts.push(`[DESCRIPTION]\n${description.trim()}`);
-        }
+        const description = field('description');
+        if (description) parts.push(`[DESCRIPTION]\n${description.slice(0, 3000)}`);
 
-        // Personality
-        const personality = ctx.characters?.[ctx.characterId]?.personality
-            || ctx.characterData?.personality
-            || '';
-        if (personality) {
-            parts.push(`[PERSONALITY]\n${personality.trim()}`);
-        }
+        const personality = field('personality');
+        if (personality) parts.push(`[PERSONALITY]\n${personality.slice(0, 1500)}`);
 
-        // Scenario
-        const scenario = ctx.characters?.[ctx.characterId]?.scenario
-            || ctx.characterData?.scenario
-            || '';
-        if (scenario) {
-            parts.push(`[SCENARIO]\n${scenario.trim()}`);
-        }
+        const scenario = field('scenario');
+        if (scenario) parts.push(`[SCENARIO]\n${scenario.slice(0, 1500)}`);
 
-        // Mes_example (example messages) — can be useful for tone
-        const mesExample = ctx.characters?.[ctx.characterId]?.mes_example
-            || ctx.characterData?.mes_example
-            || '';
-        if (mesExample && mesExample.trim().length > 0) {
-            // Trim to first 500 chars to not blow up context
-            parts.push(`[EXAMPLE DIALOGUE]\n${mesExample.trim().slice(0, 500)}`);
-        }
+        const mesExample = field('mes_example');
+        if (mesExample) parts.push(`[EXAMPLE DIALOGUE]\n${mesExample.slice(0, 500)}`);
 
-        if (userName) {
-            parts.push(`[USER PERSONA: ${userName}]`);
-        }
+        parts.push(`[USER PERSONA: ${userName}]`);
 
-        // User persona description
-        const personaDescription = ctx.persona?.description || '';
-        if (personaDescription) {
-            parts.push(`[USER DESCRIPTION]\n${personaDescription.trim()}`);
-        }
+        // Описание персоны хранится в power_user, а не в ctx.persona
+        const personaDescription = sub(ctx, ctx.powerUserSettings?.persona_description || '').trim();
+        if (personaDescription) parts.push(`[USER DESCRIPTION]\n${personaDescription.slice(0, 1500)}`);
     }
+
     // ---- World Info / Lorebooks ----
     if (s.include_wi) {
-        const worldInfo = ctx.world_info?.entries || ctx.worldInfo?.entries || {};
-        const wiEntries = Object.values(worldInfo)
-            .filter(e => e.content && !e.disable)
-            .map(e => e.content.trim().slice(0, 300))
-            .filter(Boolean);
-        if (wiEntries.length > 0) {
-            parts.push(`[WORLD INFO]\n${wiEntries.join('\n---\n')}`);
-        }
+        const wi = await getWorldInfoText(ctx, chatLines);
+        if (wi) parts.push(`[WORLD INFO]\n${wi}`);
     }
 
-    // ---- Chat history (last N messages) ----
-    const chat = ctx.chat || [];
-    const msgCount = Math.min(Number(s.context_messages) || 15, chat.length);
-
-    if (msgCount > 0) {
-        const recent = chat.slice(-msgCount);
-        const chatLines = [];
-
-        for (const msg of recent) {
-            if (msg.is_system) continue;
-            const name = msg.is_user ? (ctx.name1 || 'User') : (ctx.name2 || 'Character');
-            const text = (msg.mes || '').trim();
-            if (text) {
-                // Truncate individual messages to keep total context reasonable
-                chatLines.push(`${name}: ${text.slice(0, 400)}`);
-            }
-        }
-
-        if (chatLines.length > 0) {
-            parts.push(`[RECENT CHAT]\n${chatLines.join('\n')}`);
-        }
+    // ---- Chat history ----
+    if (chatLines.length > 0) {
+        parts.push(`[RECENT CHAT]\n${chatLines.join('\n')}`);
     }
 
-    return parts.join('\n\n');
+    const result = parts.join('\n\n');
+    console.debug('[Lumina] context:', { chatLinesCount: chatLines.length, chars: result.length });
+    return result;
 }
 
 
@@ -506,7 +511,7 @@ async function queryLuminaAPI(query) {
     const url = s.api_url.replace(/\/+$/, '');
 
     // Gather context from ST
-    const contextBlock = gatherContext();
+    const contextBlock = await gatherContext();
 
     // Build the user message: context + query
     let userContent = '';
@@ -521,7 +526,7 @@ async function queryLuminaAPI(query) {
             { role: 'user', content: userContent },
         ],
         max_tokens: Number(s.max_tokens) || 600,
-        temperature: Number(s.temperature) || 0.85,
+        temperature: Number.isFinite(Number(s.temperature)) ? Number(s.temperature) : 0.85,
         stream: false,
     };
     if (s.model) body.model = s.model;
@@ -552,7 +557,7 @@ async function queryLuminaAPI(query) {
 function injectResult(text) {
     const s = loadSettings();
     const context = getContext();
-    const depth = Number(s.inject_depth) || 1;
+    const depth = Number.isFinite(Number(s.inject_depth)) ? Number(s.inject_depth) : 1;
     const position = s.inject_position === 'before' ? 0 : 1;
     context.setExtensionPrompt(
         EXT_NAME,
@@ -835,13 +840,18 @@ jQuery(async () => {
     updateContextIndicator();
 
     // Update context indicator when chat changes
-    const eventSource = window?.eventSource || ctx?.eventSource;
-    if (eventSource) {
-        try {
-            eventSource.on('chatLoaded', () => updateContextIndicator());
-            eventSource.on('characterSelected', () => updateContextIndicator());
-        } catch (e) { /* not critical */ }
-    }
+    try {
+        const refresh = () => updateContextIndicator();
+        for (const evt of [
+            event_types?.CHAT_CHANGED,
+            event_types?.MESSAGE_RECEIVED,
+            event_types?.MESSAGE_SENT,
+            event_types?.MESSAGE_DELETED,
+            event_types?.MESSAGE_SWIPED,
+        ]) {
+            if (evt) eventSource.on(evt, refresh);
+        }
+    } catch (e) { console.warn('[Lumina] eventSource:', e); }
 
     // ---- Slash command ----
     try {
