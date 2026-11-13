@@ -376,16 +376,48 @@ async function gatherContext() {
 }
 
 
+
+// ---- NETWORK (CORS-safe) ----
+// Прямой fetch из браузера блокируется CORS у большинства провайдеров
+// ("Failed to fetch"). Если прямой запрос не прошёл — повторяем через
+// сервер SillyTavern, где CORS не действует.
+function luminaBaseUrl(url) {
+    return String(url || '').trim().replace(/\/+$/, '').replace(/\/chat\/completions$/, '');
+}
+
+async function stBackendPost(path, payload) {
+    const ctx = getContext();
+    const headers = typeof ctx.getRequestHeaders === 'function'
+        ? ctx.getRequestHeaders()
+        : { 'Content-Type': 'application/json' };
+    return fetch(path, { method: 'POST', headers, body: JSON.stringify(payload) });
+}
+
 async function fetchModels() {
     const s = loadSettings();
-    const url = s.api_url.replace(/\/+$/, '');
+    const url = luminaBaseUrl(s.api_url);
     const headers = { 'Content-Type': 'application/json' };
     if (s.api_key) headers['Authorization'] = `Bearer ${s.api_key}`;
 
-    const response = await fetch(`${url}/models`, { method: 'GET', headers });
+    let response;
+    try {
+        response = await fetch(`${url}/models`, { method: 'GET', headers });
+    } catch (netErr) {
+        lumLog('warn', 'Models: direct request failed, retrying via SillyTavern server', netErr);
+        response = await stBackendPost('/api/backends/chat-completions/status', {
+            chat_completion_source: 'openai',
+            reverse_proxy: url,
+            proxy_password: s.api_key || '',
+        });
+    }
     if (!response.ok) throw new Error(`Models: ${response.status}`);
 
-    const data = await response.json();
+    let data = await response.json();
+    if (data?.error && !Array.isArray(data?.data)) {
+        lumLog('error', 'Models: ST server could not fetch the list', data);
+        throw new Error('Models: SillyTavern server could not fetch the list (check URL and key)');
+    }
+    if (Array.isArray(data?.data?.data)) data = data.data;
     if (data.data && Array.isArray(data.data)) {
         return data.data.map(m => m.id || m.name || m).filter(Boolean);
     }
@@ -749,7 +781,7 @@ function setupDrag($fab, onTap) {
 
 async function queryLuminaAPI(query) {
     const s = loadSettings();
-    const url = s.api_url.replace(/\/+$/, '');
+    const url = luminaBaseUrl(s.api_url);
 
     // Gather context from ST
     const contextBlock = await gatherContext();
@@ -789,11 +821,27 @@ async function queryLuminaAPI(query) {
     lumLog('info', 'Request sent', { url, model: s.model || '(auto)', userChars: userContent.length, ...lastContextStats });
 
     try {
-        const response = await fetch(`${url}/chat/completions`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body),
-        });
+        let response;
+        try {
+            response = await fetch(`${url}/chat/completions`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(body),
+            });
+        } catch (netErr) {
+            lumLog('warn', 'Direct request failed (likely CORS/network), retrying via SillyTavern server', netErr);
+            try {
+                response = await stBackendPost('/api/backends/chat-completions/generate', {
+                    ...body,
+                    chat_completion_source: 'openai',
+                    reverse_proxy: url,
+                    proxy_password: s.api_key || '',
+                    stream: false,
+                });
+            } catch (err2) {
+                throw new Error(`Network error: direct — ${netErr.message}; via ST server — ${err2.message}`);
+            }
+        }
 
         if (!response.ok) {
             const errText = await response.text().catch(() => '');
