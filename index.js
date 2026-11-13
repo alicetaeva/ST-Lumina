@@ -20,6 +20,8 @@ const DEFAULT_SETTINGS = {
     max_msg_chars: 12000,
     max_total_chars: 40000,
     theme: 'lumina',
+    profiles: [],
+    active_profile: '',
     history: [],
     fab_x: -1,
     fab_y: -1,
@@ -110,6 +112,8 @@ function buildLogReport() {
     const s = { ...loadSettings() };
     s.api_key = s.api_key ? '***hidden***' : '';
     delete s.history;
+    // профили содержат API-ключи — в отчёт идут только имена
+    s.profiles = (s.profiles || []).map(p => p.name);
 
     const L = [];
     L.push('=== Lumina Search log ===');
@@ -535,6 +539,22 @@ function buildPanelHTML() {
                         <select class="lum-select" id="lum-theme">
                             ${Object.entries(THEMES).map(([k, v]) => `<option value="${k}" ${currentTheme() === k ? 'selected' : ''}>${v}</option>`).join('')}
                         </select>
+                    </div>
+
+                    <div class="lum-settings-group">
+                        <label class="lum-settings-label">Profile preset</label>
+                        <select class="lum-select" id="lum-profile-select">
+                            <option value="">— none —</option>
+                            ${(s.profiles || []).map(p => `<option value="${escapeAttr(p.name)}" ${s.active_profile === p.name ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+                        </select>
+                        <input class="lum-settings-input" id="lum-profile-name" type="text"
+                            value="${escapeAttr(s.active_profile || '')}"
+                            placeholder="Profile name" style="margin-top:6px" />
+                        <div class="lum-actions" style="margin-top:6px">
+                            <button class="lum-action-btn" id="lum-profile-save" type="button"><span>Save</span></button>
+                            <button class="lum-action-btn" id="lum-profile-delete" type="button"><span>Delete</span></button>
+                        </div>
+                        <span class="lum-model-status" id="lum-profile-status">Stores API URL, key, model, system prompt, max tokens and temperature.</span>
                     </div>
 
                     <div class="lum-settings-group">
@@ -1128,6 +1148,107 @@ jQuery(async () => {
         resultWrap.classList.remove('active');
         resultText.textContent = '';
         getContext().setExtensionPrompt(EXT_NAME, '', 0, 0);
+    });
+
+    // ---- Profile presets ----
+    const PROFILE_FIELDS = ['api_url', 'api_key', 'model', 'system_prompt', 'max_tokens', 'temperature'];
+    const profileSelect = document.getElementById('lum-profile-select');
+    const profileName = document.getElementById('lum-profile-name');
+    const profileStatus = document.getElementById('lum-profile-status');
+
+    function profileMsg(text, ok = true) {
+        if (!profileStatus) return;
+        profileStatus.textContent = text;
+        profileStatus.className = 'lum-model-status ' + (ok ? 'lum-status-ok' : 'lum-status-err');
+    }
+
+    function renderProfileSelect() {
+        if (!profileSelect) return;
+        const cur = loadSettings();
+        profileSelect.innerHTML = '<option value="">— none —</option>' +
+            (cur.profiles || []).map(p =>
+                `<option value="${escapeAttr(p.name)}" ${cur.active_profile === p.name ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
+            ).join('');
+        if (profileName) profileName.value = cur.active_profile || '';
+    }
+
+    function applyProfile(name) {
+        const cur = loadSettings();
+        const p = (cur.profiles || []).find(x => x.name === name);
+        if (!p) return false;
+        for (const f of PROFILE_FIELDS) {
+            if (p[f] !== undefined) cur[f] = p[f];
+        }
+        cur.active_profile = name;
+        saveSettingsDebounced();
+
+        const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+        setVal('lum-api-url', cur.api_url);
+        setVal('lum-api-key', cur.api_key);
+        setVal('lum-sys-prompt', cur.system_prompt);
+        setVal('lum-max-tokens', cur.max_tokens);
+        setVal('lum-temperature', cur.temperature);
+
+        // модель: если её нет в списке — добавляем, чтобы select её показал
+        const ms = document.getElementById('lum-model-select');
+        if (ms) {
+            if (cur.model && ![...ms.options].some(o => o.value === cur.model)) {
+                const opt = document.createElement('option');
+                opt.value = cur.model;
+                opt.textContent = `${cur.model} (saved)`;
+                ms.appendChild(opt);
+            }
+            ms.value = cur.model || '';
+        }
+        lumLog('info', 'Profile applied', { name, url: cur.api_url, model: cur.model || '(auto)' });
+        return true;
+    }
+
+    profileSelect?.addEventListener('change', () => {
+        const name = profileSelect.value;
+        if (!name) {
+            saveSetting('active_profile', '');
+            if (profileName) profileName.value = '';
+            profileMsg('No profile selected');
+            return;
+        }
+        if (applyProfile(name)) {
+            if (profileName) profileName.value = name;
+            profileMsg(`Loaded “${name}”`);
+            showToast(`Profile “${name}” loaded`, 'success');
+        }
+    });
+
+    document.getElementById('lum-profile-save')?.addEventListener('click', () => {
+        const cur = loadSettings();
+        const name = (profileName?.value || '').trim();
+        if (!name) { profileMsg('Enter a profile name first', false); return; }
+
+        const snapshot = { name };
+        for (const f of PROFILE_FIELDS) snapshot[f] = cur[f];
+
+        cur.profiles = Array.isArray(cur.profiles) ? cur.profiles : [];
+        const idx = cur.profiles.findIndex(p => p.name === name);
+        if (idx >= 0) cur.profiles[idx] = snapshot; else cur.profiles.push(snapshot);
+        cur.active_profile = name;
+        saveSettingsDebounced();
+        renderProfileSelect();
+        profileMsg(idx >= 0 ? `Updated “${name}”` : `Saved “${name}”`);
+        showToast(`Profile “${name}” saved`, 'success');
+        lumLog('info', 'Profile saved', { name, url: cur.api_url, model: cur.model || '(auto)' });
+    });
+
+    document.getElementById('lum-profile-delete')?.addEventListener('click', () => {
+        const cur = loadSettings();
+        const name = profileSelect?.value || '';
+        if (!name) { profileMsg('Select a profile to delete', false); return; }
+        if (!window.confirm(`Delete profile “${name}”?`)) return;
+        cur.profiles = (cur.profiles || []).filter(p => p.name !== name);
+        cur.active_profile = '';
+        saveSettingsDebounced();
+        renderProfileSelect();
+        profileMsg(`Deleted “${name}”`);
+        lumLog('info', 'Profile deleted', { name });
     });
 
     // ---- Auto-save settings ----
