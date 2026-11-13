@@ -4,6 +4,7 @@ import { SlashCommandParser } from '../../../slash-commands/SlashCommandParser.j
 import { SlashCommand } from '../../../slash-commands/SlashCommand.js';
 
 const EXT_NAME = 'lumina-search';
+const LUMINA_VERSION = '1.1.1';
 const DEFAULT_SETTINGS = {
     api_url: 'http://127.0.0.1:5001/v1',
     api_key: '',
@@ -118,6 +119,7 @@ function buildLogReport() {
     const L = [];
     L.push('=== Lumina Search log ===');
     L.push(`Exported: ${new Date().toISOString()}`);
+    L.push(`Lumina build: v${LUMINA_VERSION}`);
     L.push(`UA: ${navigator.userAgent}`);
     L.push(`Character: ${ctx.name2 || '-'} | User: ${ctx.name1 || '-'} | chat length: ${(ctx.chat || []).length}`);
     L.push('');
@@ -542,7 +544,7 @@ function buildPanelHTML() {
                     </div>
 
                     <div class="lum-settings-group">
-                        <label class="lum-settings-label">Profile preset</label>
+                        <label class="lum-settings-label">Profile preset <span style="opacity:.5;text-transform:none;">(build v${LUMINA_VERSION})</span></label>
                         <select class="lum-select" id="lum-profile-select">
                             <option value="">— none —</option>
                             ${(s.profiles || []).map(p => `<option value="${escapeAttr(p.name)}" ${s.active_profile === p.name ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
